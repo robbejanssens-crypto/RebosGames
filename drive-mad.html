@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drive Mad - Racing Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%);
+            overflow: hidden;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #333;
+            font-weight: bold;
+            font-size: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .ui-item {
+            margin: 8px 0;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px 25px;
+            border-radius: 8px;
+            z-index: 100;
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: #00d4ff;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 200;
+            display: none;
+            border: 3px solid #00d4ff;
+        }
+
+        .game-over h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        .game-over p {
+            font-size: 1.5rem;
+            margin: 10px 0;
+        }
+
+        .game-over button {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #1a1a2e;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .game-over button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="ui">
+            <div class="ui-item">Speed: <span id="speed">0</span> km/h</div>
+            <div class="ui-item">Distance: <span id="distance">0</span>m</div>
+            <div class="ui-item">Level: <span id="level">1</span></div>
+            <div class="ui-item">Lives: <span id="lives">3</span> ❤️</div>
+        </div>
+
+        <div class="controls">
+            ← → Arrow Keys to Steer | Space to Brake | WASD to Accelerate
+        </div>
+
+        <div class="game-over" id="gameOverScreen">
+            <h1>GAME OVER!</h1>
+            <p>Final Distance: <span id="finalDistance">0</span>m</p>
+            <p>Final Speed: <span id="finalSpeed">0</span> km/h</p>
+            <p>Level Reached: <span id="finalLevel">1</span></p>
+            <button onclick="location.reload()">Play Again</button>
+            <button onclick="window.history.back()">Back to Menu</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game variables
+        let gameRunning = true;
+        let car = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            width: 40,
+            height: 60,
+            speed: 0,
+            maxSpeed: 15,
+            acceleration: 0.3,
+            deceleration: 0.15,
+            angle: 0,
+            rotationSpeed: 0.1
+        };
+
+        let game = {
+            distance: 0,
+            level: 1,
+            lives: 3,
+            speed: 0,
+            score: 0
+        };
+
+        // Input handling
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Obstacles
+        let obstacles = [];
+        let obstacleCounter = 0;
+
+        class Obstacle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 50;
+                this.height = 50;
+                this.speed = 3 + (game.level * 0.5);
+                this.type = Math.random() > 0.7 ? 'trap' : 'car';
+                this.color = this.type === 'trap' ? '#FF6347' : '#FFD700';
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Draw icon
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 30px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.type === 'trap' ? '⚠️' : '🚗', this.x + this.width / 2, this.y + this.height / 2);
+            }
+
+            isOffScreen() {
+                return this.y > canvas.height;
+            }
+        }
+
+        function spawnObstacle() {
+            const lanes = [100, 200, 300, canvas.width - 100, canvas.width - 200, canvas.width - 300];
+            const randomLane = lanes[Math.floor(Math.random() * lanes.length)];
+            obstacles.push(new Obstacle(randomLane - 25, -50));
+        }
+
+        // Collision detection
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        // Draw car
+        function drawCar() {
+            ctx.save();
+            ctx.translate(car.x + car.width / 2, car.y + car.height / 2);
+            ctx.rotate(car.angle);
+
+            // Car body
+            ctx.fillStyle = '#00d4ff';
+            ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+
+            // Car windows
+            ctx.fillStyle = '#333';
+            ctx.fillRect(-car.width / 3, -car.height / 3, car.width * 0.66, car.height * 0.4);
+
+            // Car emoji
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 30px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🏎️', 0, 0);
+
+            ctx.restore();
+        }
+
+        // Draw road
+        function drawRoad() {
+            // Road background
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Road lines
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([20, 15]);
+            for (let i = -100; i < canvas.height; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(canvas.width / 2, i);
+                ctx.lineTo(canvas.width / 2, i + 30);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+
+            // Road edges
+            ctx.strokeStyle = '#FFF';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(50, 0);
+            ctx.lineTo(50, canvas.height);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(canvas.width - 50, 0);
+            ctx.lineTo(canvas.width - 50, canvas.height);
+            ctx.stroke();
+        }
+
+        // Update game
+        function update() {
+            if (!gameRunning) return;
+
+            // Handle input
+            if (keys['w'] || keys['W']) {
+                car.speed = Math.min(car.speed + car.acceleration, car.maxSpeed);
+            }
+            if (keys['s'] || keys['S']) {
+                car.speed = Math.max(car.speed - car.acceleration * 2, 0);
+            }
+            if (keys[' ']) {
+                car.speed = Math.max(car.speed - car.deceleration * 3, 0);
+            }
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+                car.angle -= car.rotationSpeed;
+            }
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+                car.angle += car.rotationSpeed;
+            }
+
+            // Apply friction
+            car.speed *= 0.98;
+
+            // Move car
+            car.x += Math.sin(car.angle) * car.speed * 2;
+            car.y += Math.cos(car.angle) * car.speed * 0.5;
+
+            // Keep car in bounds
+            if (car.x < 60) car.x = 60;
+            if (car.x > canvas.width - 60) car.x = canvas.width - 60;
+            if (car.y < 50) car.y = 50;
+            if (car.y > canvas.height - 50) car.y = canvas.height - 50;
+
+            // Update game stats
+            game.distance += car.speed;
+            game.speed = Math.round(car.speed * 10);
+
+            // Spawn obstacles
+            obstacleCounter++;
+            if (obstacleCounter > Math.max(40 - game.level * 5, 15)) {
+                spawnObstacle();
+                obstacleCounter = 0;
+            }
+
+            // Update and check obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].update();
+
+                // Check collision
+                if (checkCollision(car, obstacles[i])) {
+                    if (obstacles[i].type === 'trap') {
+                        game.lives--;
+                        obstacles.splice(i, 1);
+                        if (game.lives <= 0) {
+                            endGame();
+                        }
+                    } else {
+                        obstacles.splice(i, 1);
+                        game.score += 10;
+                    }
+                }
+
+                // Remove if off screen
+                if (obstacles[i].isOffScreen()) {
+                    obstacles.splice(i, 1);
+                    game.score += 5;
+                }
+            }
+
+            // Level up
+            if (game.distance > game.level * 1000) {
+                game.level++;
+                car.maxSpeed += 1;
+            }
+
+            // Update UI
+            document.getElementById('speed').textContent = game.speed;
+            document.getElementById('distance').textContent = Math.round(game.distance);
+            document.getElementById('level').textContent = game.level;
+            document.getElementById('lives').textContent = game.lives;
+        }
+
+        // Draw everything
+        function draw() {
+            drawRoad();
+
+            // Draw obstacles
+            for (let obstacle of obstacles) {
+                obstacle.draw();
+            }
+
+            drawCar();
+        }
+
+        // Game over
+        function endGame() {
+            gameRunning = false;
+            document.getElementById('gameOverScreen').style.display = 'block';
+            document.getElementById('finalDistance').textContent = Math.round(game.distance);
+            document.getElementById('finalSpeed').textContent = game.speed;
+            document.getElementById('finalLevel').textContent = game.level;
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
