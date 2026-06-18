@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>No I'm Not A Plankton - Fish Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(180deg, #001a4d 0%, #003d7a 50%, #004d99 100%);
+            overflow: hidden;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ff88;
+            font-weight: bold;
+            font-size: 18px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 255, 136, 0.2);
+            border: 2px solid #00ff88;
+        }
+
+        .ui-item {
+            margin: 8px 0;
+        }
+
+        .level-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #00d4ff;
+            font-weight: bold;
+            font-size: 18px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border-radius: 8px;
+            border: 2px solid #00d4ff;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #00ff88;
+            text-align: center;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border-radius: 8px;
+            z-index: 100;
+            border: 1px solid #00ff88;
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: #00ff88;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 200;
+            display: none;
+            border: 3px solid #00ff88;
+            min-width: 350px;
+        }
+
+        .game-over h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            color: #FF6B6B;
+        }
+
+        .game-over p {
+            font-size: 1.2rem;
+            margin: 10px 0;
+        }
+
+        .game-over button {
+            background: linear-gradient(135deg, #00ff88, #00cc66);
+            color: #1a1a2e;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+            margin-right: 10px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .game-over button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 255, 136, 0.4);
+        }
+
+        .pause-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: #00ff88;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 200;
+            display: none;
+            border: 3px solid #00ff88;
+        }
+
+        .pause-screen h1 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        .pause-screen p {
+            font-size: 1rem;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="ui">
+            <div class="ui-item">🐟 Size: <span id="size">1</span></div>
+            <div class="ui-item">⭐ Score: <span id="score">0</span></div>
+            <div class="ui-item">❤️ Health: <span id="health">100</span></div>
+        </div>
+
+        <div class="level-indicator">
+            <div>Level: <span id="level">1</span></div>
+        </div>
+
+        <div class="controls">
+            ⬆️⬇️⬅️➡️ Arrow Keys or WASD to Move | Space to Pause | R to Restart
+        </div>
+
+        <div class="game-over" id="gameOverScreen">
+            <h1>EATEN! 🐟</h1>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <p>Final Size: <span id="finalSize">0</span></p>
+            <p>Level Reached: <span id="finalLevel">1</span></p>
+            <button onclick="location.reload()">Play Again</button>
+            <button onclick="window.history.back()">Back to Menu</button>
+        </div>
+
+        <div class="pause-screen" id="pauseScreen">
+            <h1>⏸️ PAUSED</h1>
+            <p>Press Space to Resume</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game variables
+        let gameRunning = true;
+        let gamePaused = false;
+
+        let player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            vx: 0,
+            vy: 0,
+            speed: 5,
+            size: 15,
+            maxSize: 15,
+            health: 100,
+            maxHealth: 100
+        };
+
+        let game = {
+            score: 0,
+            level: 1,
+            eatenFood: 0,
+            time: 0
+        };
+
+        let particles = [];
+        let foods = [];
+        let enemies = [];
+
+        // Fish class
+        class Fish {
+            constructor(x, y, size, type = 'food') {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.type = type;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.speed = 2 - (size / 100);
+                this.angle = Math.atan2(this.vy, this.vx);
+                this.targetX = x;
+                this.targetY = y;
+                this.moveTimer = 0;
+            }
+
+            update() {
+                this.moveTimer++;
+                if (this.moveTimer > 60) {
+                    this.targetX = Math.random() * canvas.width;
+                    this.targetY = Math.random() * canvas.height;
+                    this.moveTimer = 0;
+                }
+
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                const dist = Math.hypot(dx, dy);
+
+                if (dist > 10) {
+                    this.vx = (dx / dist) * this.speed;
+                    this.vy = (dy / dist) * this.speed;
+                } else {
+                    this.vx *= 0.95;
+                    this.vy *= 0.95;
+                }
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Wrap around screen
+                if (this.x < -50) this.x = canvas.width + 50;
+                if (this.x > canvas.width + 50) this.x = -50;
+                if (this.y < -50) this.y = canvas.height + 50;
+                if (this.y > canvas.height + 50) this.y = -50;
+
+                this.angle = Math.atan2(this.vy, this.vx);
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+
+                // Fish body
+                ctx.fillStyle = this.type === 'food' ? '#00ff88' : '#FF6B6B';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, this.size, this.size * 0.6, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Fish tail
+                ctx.beginPath();
+                ctx.moveTo(-this.size, 0);
+                ctx.lineTo(-this.size - 10, -this.size * 0.5);
+                ctx.lineTo(-this.size - 10, this.size * 0.5);
+                ctx.closePath();
+                ctx.fill();
+
+                // Fish eye
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(this.size * 0.6, 0, this.size * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(this.size * 0.7, 0, this.size * 0.15, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+                this.life = 30;
+                this.color = color;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                this.vy += 0.1;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.life / 30;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // Input handling
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            if (e.key === ' ') {
+                e.preventDefault();
+                gamePaused = !gamePaused;
+                document.getElementById('pauseScreen').style.display = gamePaused ? 'block' : 'none';
+            }
+            if (e.key === 'r' || e.key === 'R') {
+                location.reload();
+            }
+            keys[e.key] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Generate food
+        function spawnFood() {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            const size = Math.random() * 8 + 5;
+            foods.push(new Fish(x, y, size, 'food'));
+        }
+
+        // Spawn enemy
+        function spawnEnemy() {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            const size = player.size + Math.random() * 10 + 5;
+            enemies.push(new Fish(x, y, size, 'enemy'));
+        }
+
+        // Collision detection
+        function checkCollision(obj1, obj2) {
+            const dist = Math.hypot(obj1.x - obj2.x, obj1.y - obj2.y);
+            return dist < (obj1.size + obj2.size);
+        }
+
+        // Draw player
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x, player.y);
+
+            const angle = Math.atan2(player.vy, player.vx);
+            ctx.rotate(angle);
+
+            // Fish body
+            ctx.fillStyle = '#00d4ff';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, player.size, player.size * 0.7, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Fish tail
+            ctx.beginPath();
+            ctx.moveTo(-player.size, 0);
+            ctx.lineTo(-player.size - 15, -player.size * 0.7);
+            ctx.lineTo(-player.size - 15, player.size * 0.7);
+            ctx.closePath();
+            ctx.fillStyle = '#0099cc';
+            ctx.fill();
+
+            // Fish eye
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(player.size * 0.7, -player.size * 0.3, player.size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(player.size * 0.8, -player.size * 0.3, player.size * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Mouth
+            ctx.strokeStyle = '#0099cc';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(player.size, 0, player.size * 0.3, -Math.PI / 4, Math.PI / 4);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Draw bubbles
+        function drawBubbles() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 5; i++) {
+                const x = (game.time * 0.5 + i * 50) % canvas.width;
+                const y = (game.time * 0.2 + i * 80) % canvas.height;
+                ctx.beginPath();
+                ctx.arc(x, y, 5 + Math.sin(game.time * 0.02 + i) * 2, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
+        // Update game
+        function update() {
+            if (!gameRunning || gamePaused) return;
+
+            game.time++;
+
+            // Player movement
+            let moveX = 0;
+            let moveY = 0;
+
+            if (keys['ArrowUp'] || keys['w'] || keys['W']) moveY -= 1;
+            if (keys['ArrowDown'] || keys['s'] || keys['S']) moveY += 1;
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) moveX -= 1;
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) moveX += 1;
+
+            if (moveX !== 0 || moveY !== 0) {
+                const length = Math.hypot(moveX, moveY);
+                player.vx = (moveX / length) * player.speed;
+                player.vy = (moveY / length) * player.speed;
+            } else {
+                player.vx *= 0.9;
+                player.vy *= 0.9;
+            }
+
+            player.x += player.vx;
+            player.y += player.vy;
+
+            // Keep player in bounds
+            if (player.x < player.size) player.x = player.size;
+            if (player.x > canvas.width - player.size) player.x = canvas.width - player.size;
+            if (player.y < player.size) player.y = player.size;
+            if (player.y > canvas.height - player.size) player.y = canvas.height - player.size;
+
+            // Update food
+            for (let i = foods.length - 1; i >= 0; i--) {
+                foods[i].update();
+
+                if (checkCollision(player, foods[i])) {
+                    player.size += 0.5;
+                    player.maxSize = player.size;
+                    game.score += 10;
+                    game.eatenFood++;
+
+                    // Create particles
+                    for (let j = 0; j < 5; j++) {
+                        particles.push(new Particle(foods[i].x, foods[i].y, '#00ff88'));
+                    }
+
+                    foods.splice(i, 1);
+                }
+            }
+
+            // Update enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].update();
+
+                // Chase player if larger
+                if (enemies[i].size > player.size * 1.1) {
+                    enemies[i].targetX = player.x;
+                    enemies[i].targetY = player.y;
+                }
+
+                if (checkCollision(player, enemies[i])) {
+                    if (player.size > enemies[i].size) {
+                        // Player eats enemy
+                        player.size += 2;
+                        player.maxSize = player.size;
+                        game.score += 50;
+
+                        for (let j = 0; j < 10; j++) {
+                            particles.push(new Particle(enemies[i].x, enemies[i].y, '#FF6B6B'));
+                        }
+
+                        enemies.splice(i, 1);
+                    } else if (enemies[i].size > player.size * 1.2) {
+                        // Enemy eats player
+                        player.health -= 10;
+                        if (player.health <= 0) {
+                            endGame();
+                        }
+                    }
+                }
+            }
+
+            // Update particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            // Spawn food
+            if (foods.length < 20 + game.level * 5) {
+                spawnFood();
+            }
+
+            // Spawn enemies
+            if (enemies.length < 3 + Math.floor(game.level / 2)) {
+                spawnEnemy();
+            }
+
+            // Level up
+            if (game.eatenFood > game.level * 10) {
+                game.level++;
+                player.speed += 0.5;
+            }
+
+            // Update UI
+            document.getElementById('size').textContent = Math.round(player.size);
+            document.getElementById('score').textContent = game.score;
+            document.getElementById('health').textContent = Math.round(player.health);
+            document.getElementById('level').textContent = game.level;
+        }
+
+        // Draw game
+        function draw() {
+            // Background
+            ctx.fillStyle = 'rgba(0, 26, 77, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawBubbles();
+
+            // Draw food
+            for (let food of foods) {
+                food.draw();
+            }
+
+            // Draw enemies
+            for (let enemy of enemies) {
+                enemy.draw();
+            }
+
+            // Draw particles
+            for (let particle of particles) {
+                particle.draw();
+            }
+
+            drawPlayer();
+        }
+
+        // Game over
+        function endGame() {
+            gameRunning = false;
+            document.getElementById('gameOverScreen').style.display = 'block';
+            document.getElementById('finalScore').textContent = game.score;
+            document.getElementById('finalSize').textContent = Math.round(player.size);
+            document.getElementById('finalLevel').textContent = game.level;
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initial spawn
+        for (let i = 0; i < 15; i++) {
+            spawnFood();
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
